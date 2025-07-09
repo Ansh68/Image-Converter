@@ -1,26 +1,32 @@
+
 import React, { useCallback, useState, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone';
-import { UploadCloud } from 'lucide-react';
+import { UploadCloud, Sparkles } from 'lucide-react';
 import ConversionPanel from './ConversionPanel';
-
+import { ConvertFile } from '../utils/ConvertFile';
 
 function Uploadarea() {
     const [files, setFiles] = useState([])
+    const resetFile = useCallback((id) => {
+        setFiles((curr) => curr.map((f) => f.id === id ? { ...f, status: 'ready', outputBlob: null } : f));
+    }, []);
 
     const onDrop = useCallback((accepted) => {
         const mapped = accepted.map((file) => ({
             id: crypto.randomUUID(),
-            file,                              // keep original File intact
+            file,
             preview: URL.createObjectURL(file),
-            options: { 
+            options: {
                 quality: 80,
-                targetFormat: "PNG"
+                targetFormat: "PNG",
+                width: null,
+                height: null,
+                grayscale: false
             },
             status: 'ready'
         }));
         setFiles((curr) => [...curr, ...mapped])
     }, [])
-
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
@@ -34,31 +40,92 @@ function Uploadarea() {
         return () => files.forEach((f) => URL.revokeObjectURL(f.preview));
     }, [files]);
 
+    const handleConvertAll = async () => {
+        setFiles(curr => {
+            const converting = curr.map(f =>
+                f.status === 'ready' ? { ...f, status: 'converting' } : f
+            );
+
+            Promise.all(
+                converting.map(async (f) => {
+                    if (f.status !== 'converting') return f;
+                    try {
+                        const blob = await ConvertFile(f);
+                        return { ...f, outputBlob: blob, status: 'done' };
+                    } catch {
+                        return { ...f, status: 'error' };
+                    }
+                })
+            ).then(setFiles);
+
+            return converting;
+        });
+    };
+
+    const clearAll = () => {
+        files.forEach((f) => URL.revokeObjectURL(f.preview));
+        setFiles([]);
+    };
+
     return (
-        <div className=' px-7 py-7'>
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white px-6 py-8">
             {/* UPLOAD AREA */}
-            <div {...getRootProps()} className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer max-w-5xl mx-auto
-          ${isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-gray-100 dark:border-gray-600 dark:bg-gray-800'}
-        `}>
+            <div {...getRootProps()} className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer max-w-4xl mx-auto transition-all duration-200
+                ${isDragActive 
+                    ? 'border-cyan-400 bg-cyan-50 dark:bg-cyan-950/30 shadow-lg shadow-cyan-500/20' 
+                    : 'border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800/50 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800/70'
+                }
+            `}>
                 <input {...getInputProps()} className='hidden' />
-                <div className="flex flex-col items-center justify-center gap-4 text-muted-foreground">
-                    <UploadCloud className={`w-12 h-12 md:w-16 md:h-16 transition-colors, ${isDragActive ? 'text-primary' : ''}`} />
-                    <p className="text-lg md:text-xl font-semibold text-foreground">
-                        {isDragActive ? "Drop the files here..." : "Drag & drop files or click to browse"}
-                    </p>
-                    <p className="text-xs md:text-sm">
-                        Supported: SVG, PNG, JPG, ICO, WebP, BMP, TIFF, GIF, PDF
-                    </p>
-                    <button
-                        className="px-4 py-2 rounded-md border border-gray-500 text-gray-300 bg-transparent  transition-colors"
-                    >
+                <div className="flex flex-col items-center justify-center gap-6">
+                    <div className="relative">
+                        <UploadCloud className={`w-16 h-16 transition-all duration-200 ${isDragActive ? 'text-cyan-400 scale-110' : 'text-slate-400 dark:text-slate-400'}`} />
+                        {isDragActive && (
+                            <div className="absolute inset-0 animate-ping">
+                                <UploadCloud className="w-16 h-16 text-cyan-400/50" />
+                            </div>
+                        )}
+                    </div>
+                    <div className="space-y-2">
+                        <p className="text-xl font-semibold text-slate-900 dark:text-white">
+                            {isDragActive ? "Drop the files here..." : "Drag & drop files or click to browse"}
+                        </p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                            Supported: SVG, PNG, JPG, ICO, WebP, BMP, TIFF, GIF, PDF
+                        </p>
+                    </div>
+                    <button className="px-6 py-3 rounded-lg border-2 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-700/50 hover:border-slate-400 dark:hover:border-slate-500 transition-all duration-200 font-medium">
                         Browse Files
                     </button>
-
                 </div>
             </div>
+
+            {/* CONVERSION HEADER */}
             {files.length > 0 && (
-                <div className="space-y-6">
+                <div className="flex justify-between items-center mt-8 mb-6 max-w-4xl mx-auto">
+                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Ready to Convert</h1>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={clearAll}
+                            className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        >
+                            Clear All
+                        </button>
+                        <button
+                            className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-6 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:from-orange-600 hover:to-red-600 transition-all duration-200 flex items-center gap-2 cursor-pointer"
+                            disabled={files.every(f => f.status !== 'ready')}
+                            onClick={handleConvertAll}
+                        >
+                            <Sparkles className="w-4 h-4" />
+                            Convert {files.filter(f => f.status === 'ready').length} File(s)
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* CONVERSION PANELS */}
+            {files.length > 0 && (
+                <div className="space-y-4 max-w-4xl mx-auto">
                     {files.map((item) => (
                         <ConversionPanel
                             key={item.id}
@@ -70,6 +137,16 @@ function Uploadarea() {
                                     )
                                 )
                             }
+                            onRemove={() => setFiles(curr => curr.filter(f => f.id !== item.id))}
+                            onConvert={() => resetFile(item.id)}
+                            onDownload={() => {
+                                const url = URL.createObjectURL(item.outputBlob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `${item.file.name.split('.')[0]}.${item.options.targetFormat.toLowerCase()}`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                            }}
                         />
                     ))}
                 </div>
@@ -77,6 +154,5 @@ function Uploadarea() {
         </div>
     );
 }
+
 export default Uploadarea;
-
-
