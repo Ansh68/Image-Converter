@@ -12,4 +12,6 @@ Features include:
 
 💻 Client-side only — no server, no uploads, just fast performance
 
+✅ Supports PDF and GIF Conversion
+
 Whether you're a developer, designer, or casual user, PixPress helps streamline your image workflow with speed and simplicity.
